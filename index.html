@@ -2,215 +2,440 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Mindmap Creator</title>
 <style>
 :root{--bg:#12151c;--panel:#1a1f2b;--panel2:#232a39;--line:#2e3749;--text:#e8ecf4;--muted:#8d99b0;--acc:#6aa8ff}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
+html,body{margin:0;height:100%;overflow:hidden}
 body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
-header{display:flex;gap:8px;align-items:center;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
-header h1{font-size:1rem;margin:0 8px 0 0}
-#title{background:transparent;border:1px solid transparent;color:var(--text);font-size:1rem;font-weight:700;padding:5px 8px;border-radius:6px;min-width:160px}
+header{display:flex;gap:6px;align-items:center;padding:7px 10px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:1rem;margin:0 6px 0 0;white-space:nowrap}
+#title{background:transparent;border:1px solid transparent;color:var(--text);font-size:1rem;font-weight:700;padding:5px 8px;border-radius:6px;width:180px;max-width:40vw}
 #title:hover,#title:focus{border-color:var(--line);outline:none;background:var(--panel2)}
 button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:.85rem}
 button:hover{border-color:var(--acc)}
 button.on{background:var(--acc);color:#0b1220;border-color:var(--acc)}
 .sp{flex:1}
-main{flex:1;min-height:0;display:flex}
-#cols{flex:1;display:flex;overflow-x:auto;gap:10px;padding:12px;align-items:flex-start}
-.col{flex:none;width:260px;max-height:100%;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:10px}
-.col h2{margin:0;padding:9px 12px;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+main{flex:1;min-height:0;display:flex;position:relative}
+
+/* ---------- Freie Leinwand ---------- */
+#canvas{flex:1;position:relative;overflow:hidden;overflow:clip;touch-action:none;cursor:grab;
+  background-image:radial-gradient(#2b3447 1.2px,transparent 1.2px);background-size:28px 28px}
+#canvas.panning{cursor:grabbing}
+#world{position:absolute;left:0;top:0;transform-origin:0 0}
+#links{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
+.node{position:absolute;width:max-content;min-width:90px;max-width:340px;background:var(--panel2);
+  border:2px solid var(--c,#6aa8ff);border-radius:12px;padding:8px 12px;cursor:grab;user-select:none;-webkit-user-select:none;
+  box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.node.root{font-weight:700;font-size:1.08rem;background:#2b3550}
+.node.sel{box-shadow:0 0 0 3px rgba(106,168,255,.55),0 2px 8px rgba(0,0,0,.35)}
+.node.hasnote::after{content:"📝";position:absolute;right:-8px;top:-10px;font-size:.8rem}
+.txt{white-space:pre-wrap;overflow-wrap:anywhere;outline:none;min-height:1.25em;line-height:1.25}
+.txt:empty::before{content:attr(data-ph);color:var(--muted)}
+.txt[contenteditable="true"],.txt[contenteditable="plaintext-only"]{cursor:text;user-select:text;-webkit-user-select:text}
+.plus{display:none;position:absolute;right:-15px;top:50%;transform:translateY(-50%);width:26px;height:26px;border-radius:50%;
+  background:var(--acc);color:#0b1220;font-weight:800;line-height:24px;text-align:center;cursor:pointer;font-size:1.1rem}
+.node.sel .plus{display:block}
+#hint{position:absolute;z-index:5;left:10px;bottom:8px;background:rgba(18,21,28,.85);padding:3px 6px;border-radius:6px;font-size:.72rem;color:var(--muted);pointer-events:none;max-width:70%}
+
+/* ---------- Liste ---------- */
+#cols{flex:1;display:none;overflow-x:auto;gap:10px;padding:12px;align-items:flex-start}
+.col{flex:none;width:280px;max-height:100%;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.col h2{margin:0;padding:9px 12px;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--line);overflow-wrap:anywhere}
 .list{overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:5px}
-.item{display:flex;align-items:center;gap:4px;background:var(--panel2);border:1px solid var(--line);border-left:5px solid var(--c,#555);border-radius:7px;padding:2px 4px}
+.item{display:flex;align-items:flex-start;gap:4px;background:var(--panel2);border:1px solid var(--line);border-left:5px solid var(--c,#555);border-radius:7px;padding:2px 4px}
 .item.sel{border-color:var(--acc);border-left-color:var(--c,#555);box-shadow:0 0 0 1px var(--acc)}
-.item input.t{flex:1;min-width:0;background:transparent;border:none;color:var(--text);padding:7px 4px;font-size:.92rem}
-.item input.t:focus{outline:none}
-.item .go{color:var(--muted);font-size:.75rem;padding:0 2px;cursor:pointer;user-select:none}
+.item textarea.t{flex:1;min-width:0;background:transparent;border:none;color:var(--text);padding:7px 4px;font:inherit;font-size:.92rem;resize:none;overflow:hidden;line-height:1.25}
+.item textarea.t:focus{outline:none}
+.item .meta{display:flex;flex-direction:column;align-items:flex-end;gap:3px;padding-top:6px}
 .item .cnt{font-size:.7rem;color:var(--muted);background:var(--bg);border-radius:9px;padding:1px 6px}
-.item .note{font-size:.8rem;opacity:.8}
 .item .acts{display:none;gap:2px}
 .item:hover .acts,.item.sel .acts{display:flex}
 .acts button{padding:1px 5px;font-size:.75rem;border-radius:4px}
 .add{padding:6px;border-top:1px solid var(--line)}
-.add input{width:100%;background:var(--bg);border:1px dashed var(--line);border-radius:7px;color:var(--text);padding:8px;font-size:.9rem}
+.add input{width:100%;background:var(--bg);border:1px dashed var(--line);border-radius:7px;color:var(--text);padding:8px;font:inherit;font-size:.9rem}
 .add input:focus{outline:none;border-color:var(--acc)}
-#side{width:280px;flex:none;background:var(--panel);border-left:1px solid var(--line);padding:12px;display:flex;flex-direction:column;gap:8px;overflow:auto}
+
+/* ---------- Details ---------- */
+#side{width:290px;flex:none;background:var(--panel);border-left:1px solid var(--line);padding:12px;display:flex;flex-direction:column;gap:8px;overflow:auto}
+#side.hide{display:none}
 #side label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
-#side textarea{flex:1;min-height:140px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:8px;font:inherit;resize:vertical}
-#side input[type=text]{background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:8px;font:inherit}
+#side textarea,#side input[type=text]{background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:8px;font:inherit;width:100%}
+#sNote{min-height:160px;resize:vertical}
+#sTitle{resize:none;overflow:hidden}
 .sw{display:flex;gap:6px;flex-wrap:wrap}
-.sw span{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+.sw span{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent}
 .sw span.on{border-color:#fff}
-#crumb{font-size:.8rem;color:var(--muted)}
-#map{flex:1;overflow:auto;display:none;background:var(--bg)}
-#map svg{display:block}
-#map g.n{cursor:pointer}
-#map text{fill:var(--text);font-size:13px;pointer-events:none}
-@media(max-width:700px){#side{display:none}.col{width:78vw}}
+#crumb{font-size:.8rem;color:var(--muted);overflow-wrap:anywhere}
+@media(max-width:700px){#side{position:absolute;right:0;top:0;bottom:0;width:min(320px,88vw);z-index:20;box-shadow:-6px 0 20px rgba(0,0,0,.5)}.col{width:80vw}#hint{display:none}}
 </style>
 </head>
 <body>
 <header>
   <h1>🧠 Mindmap</h1>
   <input id="title" title="Titel der Mindmap" value="Meine Mindmap">
-  <button id="vCols" class="on">☰ Spalten</button>
-  <button id="vMap">🕸 Karte</button>
+  <button id="vCanvas" class="on">🕸 Leinwand</button>
+  <button id="vCols">☰ Liste</button>
+  <button id="bLayout" title="Alle Punkte automatisch ordnen">Ordnen</button>
+  <button id="bFit" title="Alles ins Bild">Einpassen</button>
+  <button id="zOut">−</button><button id="zIn">+</button>
   <span class="sp"></span>
+  <button id="bSide">Details</button>
   <button id="bExp">⬇ Export</button>
   <button id="bImp">⬆ Import</button>
   <button id="bNew">Neu</button>
   <input type="file" id="file" accept=".json,application/json" hidden>
 </header>
 <main>
+  <div id="canvas">
+    <div id="world"><svg id="links"></svg></div>
+    <div id="hint">Ziehen: verschieben (Shift: mit Unterpunkten) · Doppelklick: bearbeiten · Doppelklick ins Leere: neuer Punkt · Tab: Unterpunkt · Entf: löschen · Mausrad/Pinch: Zoom</div>
+  </div>
   <div id="cols"></div>
-  <div id="map"></div>
   <aside id="side">
-    <div id="crumb">Nichts ausgewählt</div>
-    <label>Titel</label><input type="text" id="sTitle">
+    <div id="crumb"></div>
+    <label>Titel</label><textarea id="sTitle" rows="1"></textarea>
     <label>Farbe</label><div class="sw" id="sw"></div>
     <label>Notizen / Inhalt</label><textarea id="sNote" placeholder="Hier den Map-Point ausfüllen …"></textarea>
   </aside>
 </main>
 <script>
 const COLORS=['#6aa8ff','#4cc38a','#f2c14e','#ef7b7b','#b08cf0','#4fd1d9','#f29e5c','#8d99b0'];
-const KEY='mindmap-v1';
-let uid=()=>Math.random().toString(36).slice(2,9);
-let node=(text,color)=>({id:uid(),text,note:'',color:color||COLORS[0],children:[]});
-let state=load()||fresh();
-let path=[];        // ausgewählte IDs ab Wurzel (ohne Wurzel)
-let view='cols';
+const KEY='mindmap-v2',KEY1='mindmap-v1',VKEY='mindmap-view';
+const $=s=>document.querySelector(s);
+const uid=()=>Math.random().toString(36).slice(2,9);
+const node=(text,color)=>({id:uid(),text,note:'',color:color||COLORS[0],children:[]});
+const fin=Number.isFinite;
 
 function fresh(){
   const r=node('Meine Mindmap');
-  ['Idee A','Idee B','Idee C'].forEach((t,i)=>{const c=node(t,COLORS[i]);r.children.push(c)});
+  ['Idee A','Idee B','Idee C'].forEach((t,i)=>r.children.push(node(t,COLORS[i])));
   r.children[0].children.push(node('Unterpunkt 1',COLORS[0]),node('Unterpunkt 2',COLORS[0]));
   return r;
 }
-function load(){try{return JSON.parse(localStorage.getItem(KEY))}catch(e){return null}}
+function load(){for(const k of [KEY,KEY1]){try{const d=JSON.parse(localStorage.getItem(k));if(d&&Array.isArray(d.children))return d}catch(e){}}return null}
+let state=load()||fresh();
+let view={x:40,y:40,k:1,set:false};
+try{const v=JSON.parse(localStorage.getItem(VKEY));if(v&&fin(v.k)){view=v;view.set=true}}catch(e){}
+let selId=state.id,mode='canvas';
 function save(){localStorage.setItem(KEY,JSON.stringify(state))}
-const $=s=>document.querySelector(s);
+function saveView(){localStorage.setItem(VKEY,JSON.stringify(view))}
 
-// Pfad -> Knotenliste (Wurzel + Auswahl), ungültige IDs abschneiden
-function chain(){
-  const out=[state];
-  for(const id of path){const n=out[out.length-1].children.find(c=>c.id===id);if(!n)break;out.push(n)}
-  path=out.slice(1).map(n=>n.id);return out;
-}
-function findParent(id,n=state){
-  for(const c of n.children){if(c.id===id)return n;const p=findParent(id,c);if(p)return p}
-  return null;
-}
-function sel(){const c=chain();return c[c.length-1]}
+const walk=(n,f)=>{f(n);n.children.forEach(c=>walk(c,f))};
+const byId=id=>{let r=null;walk(state,n=>{if(n.id===id)r=n});return r};
+const parentOf=(id,n=state)=>{for(const c of n.children){if(c.id===id)return n;const p=parentOf(id,c);if(p)return p}return null};
+const sel=()=>byId(selId)||state;
+function pathNodes(){const out=[];let c=sel();while(c){out.unshift(c);c=parentOf(c.id)}return out}
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-function render(){
-  save();
-  const ch=chain();
-  $('#title').value=state.text;
-  if(view==='cols')renderCols(ch);else renderMap(ch);
-  renderSide(ch);
+/* ================= Leinwand ================= */
+const canvas=$('#canvas'),world=$('#world'),links=$('#links');
+const els=new Map();
+const editable=document.createElement('div');editable.contentEditable='plaintext-only';
+const EDIT=editable.contentEditable==='plaintext-only'?'plaintext-only':'true';
+
+function applyView(){
+  world.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.k})`;
+  const s=28*view.k;canvas.style.backgroundSize=`${s}px ${s}px`;canvas.style.backgroundPosition=`${view.x}px ${view.y}px`;
+}
+function renderCanvas(){
+  els.forEach(e=>e.remove());els.clear();
+  walk(state,n=>{
+    const el=document.createElement('div');el.className='node'+(n===state?' root':'');el.dataset.id=n.id;
+    el.innerHTML='<div class="txt" spellcheck="false" data-ph="Neuer Punkt"></div><div class="plus" title="Unterpunkt hinzufügen">+</div>';
+    const t=el.firstChild;t.textContent=n.text;
+    t.addEventListener('input',()=>{n.text=readTxt(t);save();drawLinks();if(document.activeElement!==$('#sTitle'))renderSideLight();if(n===state)$('#title').value=n.text});
+    t.addEventListener('blur',()=>stopEdit(n.id));
+    t.addEventListener('paste',e=>{e.preventDefault();document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text'))});
+    t.addEventListener('keydown',e=>{
+      if(t.contentEditable==='false')return;
+      e.stopPropagation();
+      if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();stopEdit(n.id)}
+      else if(e.key==='Tab'){e.preventDefault();stopEdit(n.id);addChild(n)}
+      else if(e.key==='Escape'){e.preventDefault();stopEdit(n.id)}
+      else if(e.key==='Enter'&&e.shiftKey&&EDIT==='true'){e.preventDefault();document.execCommand('insertLineBreak')}
+    });
+    el.querySelector('.plus').addEventListener('click',e=>{e.stopPropagation();addChild(n)});
+    world.appendChild(el);els.set(n.id,el);
+  });
+  paintNodes();
+  ensurePositions();
+  applyPos();applyView();drawLinks();
+}
+function readTxt(t){return t.innerText.replace(/\n$/,'')}
+function paintNodes(){
+  walk(state,n=>{const el=els.get(n.id);if(!el)return;
+    el.style.setProperty('--c',n.color);el.classList.toggle('sel',n.id===selId);el.classList.toggle('hasnote',!!n.note);
+    const t=el.firstChild;if(document.activeElement!==t&&t.textContent!==n.text)t.textContent=n.text});
+}
+function applyPos(){walk(state,n=>{const el=els.get(n.id);if(el){el.style.left=(n.x||0)+'px';el.style.top=(n.y||0)+'px'}})}
+const sz=n=>{const e=els.get(n.id);return e?{w:e.offsetWidth,h:e.offsetHeight}:{w:120,h:44}};
+
+function ensurePositions(){
+  if(!fin(state.x)||!fin(state.y)){autoLayout();return}
+  (function w(n){n.children.forEach((c,i)=>{
+    if(!fin(c.x)||!fin(c.y)){
+      const ps=sz(n);c.x=n.x+ps.w+70;
+      const prev=n.children.slice(0,i).reverse().find(s=>fin(s.y));
+      c.y=prev?prev.y+sz(prev).h+22:n.y;
+    }
+    w(c)})})(state);
+}
+function autoLayout(){
+  const colW=[];(function mw(n,d){colW[d]=Math.max(colW[d]||0,sz(n).w);n.children.forEach(c=>mw(c,d+1))})(state,0);
+  const colX=[];let acc=0;colW.forEach((w,d)=>{colX[d]=acc;acc+=w+80});
+  let y=0;
+  (function place(n,d){
+    const s=sz(n);n.x=colX[d];
+    if(!n.children.length){n.y=y;y+=s.h+24;return}
+    n.children.forEach(c=>place(c,d+1));
+    const f=n.children[0],l=n.children[n.children.length-1];
+    n.y=((f.y+sz(f).h/2)+(l.y+sz(l).h/2))/2-s.h/2;
+    y=Math.max(y,n.y+s.h+24);
+  })(state,0);
+}
+function drawLinks(){
+  let s='';
+  walk(state,n=>{
+    const pe=els.get(n.id);if(!pe)return;const pw=pe.offsetWidth,ph=pe.offsetHeight;
+    n.children.forEach(c=>{
+      const ce=els.get(c.id);if(!ce)return;const cw=ce.offsetWidth,chh=ce.offsetHeight;
+      let x1,x2;
+      if(c.x>=n.x+pw-10){x1=n.x+pw;x2=c.x}else if(c.x+cw<=n.x+10){x1=n.x;x2=c.x+cw}else{x1=n.x+pw/2;x2=c.x+cw/2}
+      const y1=n.y+ph/2,y2=c.y+chh/2,o=Math.max(40,Math.abs(x2-x1)/2)*(x2>=x1?1:-1);
+      s+=`<path d="M${x1},${y1} C${x1+o},${y1} ${x2-o},${y2} ${x2},${y2}" fill="none" stroke="${c.color}" stroke-width="2.5" opacity=".75"/>`;
+    });
+  });
+  links.innerHTML=s;
+}
+new ResizeObserver(()=>{if(mode==='canvas')drawLinks()}).observe(world);
+
+function fitView(){
+  const cw=canvas.clientWidth,ch=canvas.clientHeight;if(!cw||!ch)return;
+  let a=1e9,b=1e9,c=-1e9,d=-1e9;
+  walk(state,n=>{const s=sz(n);a=Math.min(a,n.x);b=Math.min(b,n.y);c=Math.max(c,n.x+s.w);d=Math.max(d,n.y+s.h)});
+  const pad=50,k=Math.max(.2,Math.min(1.2,(cw-2*pad)/(c-a),(ch-2*pad)/(d-b)));
+  view.k=k;view.x=(cw-(c-a)*k)/2-a*k;view.y=(ch-(d-b)*k)/2-b*k;view.set=true;applyView();saveView();
+}
+function zoomAt(cx,cy,f){
+  const k=Math.max(.2,Math.min(2.5,view.k*f)),r=k/view.k;
+  view.x=cx-(cx-view.x)*r;view.y=cy-(cy-view.y)*r;view.k=k;applyView();saveView();
+}
+const rectOf=()=>canvas.getBoundingClientRect();
+const toWorld=(cx,cy)=>{const r=rectOf();return{x:(cx-r.left-view.x)/view.k,y:(cy-r.top-view.y)/view.k}};
+
+function select(id,noRender){
+  selId=id;
+  if(mode==='canvas'){paintNodes();}else if(!noRender)renderCols();
+  renderSide();
+}
+function reveal(id){
+  const n=byId(id),s=sz(n),cw=canvas.clientWidth,ch=canvas.clientHeight,m=40;
+  const L=n.x*view.k+view.x,T=n.y*view.k+view.y,R=L+s.w*view.k,B=T+s.h*view.k;
+  if(R>cw-m)view.x-=R-(cw-m);if(L<m)view.x+=m-L;
+  if(B>ch-m)view.y-=B-(ch-m);if(T<m)view.y+=m-T;
+  applyView();saveView();
+}
+function startEdit(id){
+  reveal(id);
+  const el=els.get(id);if(!el)return;const t=el.firstChild;
+  t.contentEditable=EDIT;t.focus({preventScroll:true});
+  const r=document.createRange();r.selectNodeContents(t);const s=getSelection();s.removeAllRanges();s.addRange(r);
+}
+function stopEdit(id){
+  const el=els.get(id);if(!el)return;const t=el.firstChild;
+  if(t.contentEditable==='false')return;
+  t.contentEditable='false';t.blur();getSelection().removeAllRanges();
+  const n=byId(id);if(n){n.text=readTxt(t);save()}drawLinks();
+}
+function addChild(p,pos){
+  const n=node('',p===state?COLORS[p.children.length%COLORS.length]:p.color);
+  if(p!==state&&p.children.length===0)n.color=p.color;
+  if(mode==='canvas'){
+    const ps=sz(p),last=p.children[p.children.length-1];
+    n.x=pos?pos.x:p.x+ps.w+70;
+    n.y=pos?pos.y:(last?last.y+sz(last).h+22:p.y);
+  }
+  p.children.push(n);selId=n.id;
+  render();
+  if(mode==='canvas')startEdit(n.id);
+  return n;
+}
+function addSibling(n){const p=parentOf(n.id);if(!p){addChild(n);return}
+  const c=node('',n.color);if(mode==='canvas'){c.x=n.x;c.y=n.y+sz(n).h+22}
+  p.children.splice(p.children.indexOf(n)+1,0,c);selId=c.id;render();if(mode==='canvas')startEdit(c.id)}
+function delNode(n){
+  const p=parentOf(n.id);if(!p)return;
+  if(n.children.length&&!confirm(`"${n.text}" samt ${n.children.length} Unterpunkten löschen?`))return;
+  p.children.splice(p.children.indexOf(n),1);selId=p.id;render();
 }
 
-function renderCols(ch){
-  const box=$('#cols');const scroll=box.scrollLeft;box.innerHTML='';
-  // pro Ebene eine Spalte: Kinder von ch[i]; zusätzlich eine Spalte für die Kinder des letzten Knotens
+/* Zeiger: verschieben, schwenken, pinchen */
+const ptrs=new Map();let drag=null,pan=null,pinch=null,lastTap=null;
+canvas.addEventListener('pointerdown',e=>{
+  if(e.target.closest('.plus'))return;
+  const t=e.target.closest('.txt');if(t&&t.contentEditable!=='false'&&t.isContentEditable)return;
+  ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  try{canvas.setPointerCapture(e.pointerId)}catch(_){}
+  if(ptrs.size===2){
+    const [a,b]=[...ptrs.values()],r=rectOf();
+    pinch={d:Math.hypot(a.x-b.x,a.y-b.y)||1,k:view.k,cx:(a.x+b.x)/2-r.left,cy:(a.y+b.y)/2-r.top,vx:view.x,vy:view.y};
+    drag=pan=null;return;
+  }
+  const ne=e.target.closest('.node');
+  if(ne){
+    const n=byId(ne.dataset.id);select(n.id);
+    let sub=null;if(e.shiftKey){sub=[];walk(n,m=>{if(m!==n)sub.push({m,x:m.x,y:m.y})})}
+    drag={n,sx:e.clientX,sy:e.clientY,ox:n.x,oy:n.y,moved:false,sub};
+  }else pan={sx:e.clientX,sy:e.clientY,vx:view.x,vy:view.y,moved:false};
+});
+canvas.addEventListener('pointermove',e=>{
+  if(!ptrs.has(e.pointerId))return;ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch&&ptrs.size>=2){
+    const [a,b]=[...ptrs.values()],d=Math.hypot(a.x-b.x,a.y-b.y)||1,r=rectOf();
+    const k=Math.max(.2,Math.min(2.5,pinch.k*d/pinch.d)),cx=(a.x+b.x)/2-r.left,cy=(a.y+b.y)/2-r.top;
+    const wx=(pinch.cx-pinch.vx)/pinch.k,wy=(pinch.cy-pinch.vy)/pinch.k;
+    view.k=k;view.x=cx-wx*k;view.y=cy-wy*k;applyView();return;
+  }
+  if(drag){
+    const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
+    if(!drag.moved&&Math.hypot(dx,dy)>5)drag.moved=true;
+    if(drag.moved){
+      const ddx=dx/view.k,ddy=dy/view.k;
+      drag.n.x=drag.ox+ddx;drag.n.y=drag.oy+ddy;
+      if(drag.sub)drag.sub.forEach(s=>{s.m.x=s.x+ddx;s.m.y=s.y+ddy});
+      applyPos();drawLinks();
+    }
+  }else if(pan){
+    const dx=e.clientX-pan.sx,dy=e.clientY-pan.sy;
+    if(!pan.moved&&Math.hypot(dx,dy)>5){pan.moved=true;canvas.classList.add('panning')}
+    if(pan.moved){view.x=pan.vx+dx;view.y=pan.vy+dy;applyView()}
+  }
+});
+function endPtr(e){
+  if(!ptrs.has(e.pointerId))return;ptrs.delete(e.pointerId);
+  canvas.classList.remove('panning');
+  if(pinch){if(ptrs.size<2){pinch=null;saveView()}return}
+  const now=Date.now();
+  if(drag){
+    if(drag.moved){save()}
+    else{ // Tippen: Doppeltipp = bearbeiten
+      if(lastTap&&lastTap.id===drag.n.id&&now-lastTap.t<400){startEdit(drag.n.id);lastTap=null}else lastTap={id:drag.n.id,t:now};
+    }
+  }else if(pan){
+    if(pan.moved)saveView();
+    else if(lastTap&&lastTap.id==='bg'&&now-lastTap.t<400){addChild(sel(),toWorld(e.clientX,e.clientY));lastTap=null}
+    else lastTap={id:'bg',t:now};
+  }
+  drag=pan=null;
+}
+canvas.addEventListener('pointerup',endPtr);canvas.addEventListener('pointercancel',endPtr);
+canvas.addEventListener('scroll',()=>{canvas.scrollLeft=0;canvas.scrollTop=0});
+canvas.addEventListener('wheel',e=>{e.preventDefault();const r=rectOf();zoomAt(e.clientX-r.left,e.clientY-r.top,Math.exp(-e.deltaY*.0015))},{passive:false});
+document.addEventListener('keydown',e=>{
+  if(mode!=='canvas')return;
+  if(e.target.closest&&e.target.closest('input,textarea,[contenteditable="true"],[contenteditable="plaintext-only"]'))return;
+  const n=sel();
+  if(e.key==='Tab'){e.preventDefault();addChild(n)}
+  else if(e.key==='Enter'&&e.shiftKey){e.preventDefault();addSibling(n)}
+  else if(e.key==='Enter'||e.key==='F2'){e.preventDefault();startEdit(n.id)}
+  else if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();delNode(n)}
+});
+
+/* ================= Liste ================= */
+function grow(t){t.style.height='auto';t.style.height=t.scrollHeight+'px'}
+function renderCols(){
+  const box=$('#cols');const sc=box.scrollLeft;box.innerHTML='';
+  const ch=pathNodes();
   for(let i=0;i<ch.length;i++){
-    const parent=ch[i],selId=path[i];
+    const parent=ch[i],selChild=ch[i+1]&&ch[i+1].id;
     const col=document.createElement('div');col.className='col';
-    col.innerHTML=`<h2></h2><div class="list"></div><div class="add"><input placeholder="+ Neuer Punkt (Enter)"></div>`;
-    col.querySelector('h2').textContent=i===0?'Hauptpunkte':parent.text||'(leer)';
+    col.innerHTML='<h2></h2><div class="list"></div><div class="add"><input placeholder="+ Neuer Punkt (Enter)"></div>';
+    col.querySelector('h2').textContent=i===0?'Hauptpunkte':(parent.text||'(leer)');
     const list=col.querySelector('.list');
     parent.children.forEach((c,idx)=>{
-      const el=document.createElement('div');el.className='item'+(c.id===selId?' sel':'');
-      el.style.setProperty('--c',c.color);
-      el.innerHTML=`<input class="t"><span class="note" title="Hat Notiz">${c.note?'📝':''}</span>${c.children.length?`<span class="cnt">${c.children.length}</span>`:''}<span class="acts"><button data-a="up" title="Hoch">↑</button><button data-a="dn" title="Runter">↓</button><button data-a="del" title="Löschen">✕</button></span><span class="go">▸</span>`;
-      const inp=el.querySelector('input');inp.value=c.text;
-      inp.addEventListener('input',()=>{c.text=inp.value;save();if(c.id===path[i]){renderSideOnly();}});
-      inp.addEventListener('focus',()=>{if(path[i]!==c.id){path=path.slice(0,i);path.push(c.id);render();
-        const again=document.querySelectorAll('.col')[i]?.querySelectorAll('.item input.t')[idx];again&&again.focus()}});
-      inp.addEventListener('keydown',e=>{if(e.key==='Enter'){inp.blur();focusAdd(i+1)}});
-      el.addEventListener('click',e=>{if(e.target.dataset.a)return;path=path.slice(0,i);path.push(c.id);render()});
-      el.querySelectorAll('[data-a]').forEach(b=>b.onclick=e=>{
-        e.stopPropagation();const a=b.dataset.a;
-        if(a==='del'){if(c.children.length&&!confirm(`"${c.text}" samt ${c.children.length} Unterpunkten löschen?`))return;parent.children.splice(idx,1);path=path.slice(0,i)}
-        else{const j=a==='up'?idx-1:idx+1;if(j<0||j>=parent.children.length)return;[parent.children[idx],parent.children[j]]=[parent.children[j],parent.children[idx]]}
-        render();
+      const el=document.createElement('div');el.className='item'+(c.id===selChild?' sel':'');el.style.setProperty('--c',c.color);
+      el.innerHTML=`<textarea class="t" rows="1" data-id="${c.id}" spellcheck="false"></textarea><div class="meta">${c.note?'<span>📝</span>':''}${c.children.length?`<span class="cnt">${c.children.length}</span>`:''}<span class="acts"><button data-a="up" title="Hoch">↑</button><button data-a="dn" title="Runter">↓</button><button data-a="del" title="Löschen">✕</button></span></div>`;
+      const ta=el.querySelector('textarea');ta.value=c.text;
+      ta.addEventListener('input',()=>{c.text=ta.value;save();grow(ta);if(c.id===selId)renderSideLight()});
+      ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();ta.blur();const a=document.querySelector(`.add input[data-lvl="${i+1}"]`);a&&a.focus()}});
+      el.addEventListener('click',e=>{
+        const a=e.target.dataset&&e.target.dataset.a;
+        if(a){e.stopPropagation();
+          if(a==='del'){delNode(c);return}
+          const j=a==='up'?idx-1:idx+1;if(j<0||j>=parent.children.length)return;
+          [parent.children[idx],parent.children[j]]=[parent.children[j],parent.children[idx]];render();return}
+        const wasTxt=e.target===ta,pos=ta.selectionStart;
+        if(selId!==c.id){select(c.id);if(wasTxt){const t2=document.querySelector(`textarea[data-id="${c.id}"]`);if(t2){t2.focus();t2.setSelectionRange(pos,pos)}}}
       });
       list.appendChild(el);
     });
-    const add=col.querySelector('.add input');
-    add.dataset.lvl=i;
+    const add=col.querySelector('.add input');add.dataset.lvl=i;
     add.addEventListener('keydown',e=>{
       if(e.key!=='Enter'||!add.value.trim())return;
-      const col0=parent.children.length?parent.children[parent.children.length-1].color:null;
       const n=node(add.value.trim(),i===0?COLORS[parent.children.length%COLORS.length]:parent.color);
-      parent.children.push(n);path=path.slice(0,i);path.push(n.id);render();focusAdd(i);
+      parent.children.push(n);selId=n.id;render();
+      const a=document.querySelector(`.add input[data-lvl="${i}"]`);a&&a.focus();
     });
     box.appendChild(col);
   }
-  box.scrollLeft=scroll;
+  box.querySelectorAll('textarea.t').forEach(grow);
+  box.scrollLeft=sc;
   const last=box.lastElementChild;if(last)last.scrollIntoView({inline:'nearest',block:'nearest'});
 }
-function focusAdd(i){const a=document.querySelector(`.add input[data-lvl="${i}"]`);a&&a.focus()}
 
-function renderSide(ch){
-  const n=ch[ch.length-1];
-  $('#crumb').textContent=ch.map(x=>x.text||'…').join(' › ');
+/* ================= Details ================= */
+function renderSide(){
+  const n=sel();renderSideLight();
   const sw=$('#sw');sw.innerHTML='';
   COLORS.forEach(c=>{const s=document.createElement('span');s.style.background=c;if(c===n.color)s.className='on';
-    s.onclick=()=>{n.color=c;(function paint(x){x.color=c;x.children.forEach(paint)})(n);render()};sw.appendChild(s)});
-  $('#sTitle').value=n.text;$('#sNote').value=n.note;
+    s.onclick=()=>{n.color=c;render()};sw.appendChild(s)});
+  $('#sNote').value=n.note;
 }
-function renderSideOnly(){const n=sel();$('#sTitle').value=n.text;$('#crumb').textContent=chain().map(x=>x.text||'…').join(' › ')}
-$('#sTitle').addEventListener('input',e=>{const n=sel();n.text=e.target.value;save();if(n===state)$('#title').value=n.text;
-  document.querySelectorAll('.col').forEach(()=>{});
-});
-$('#sTitle').addEventListener('change',render);
-$('#sNote').addEventListener('input',e=>{sel().note=e.target.value;save()});
-$('#sNote').addEventListener('change',render);
-$('#title').addEventListener('input',e=>{state.text=e.target.value;save()});
-
-// ---------- Kartenansicht ----------
-function renderMap(ch){
-  const W=190,H=34,GX=60,GY=12;let y=0;
-  const pos=new Map();
-  (function lay(n,d){
-    if(!n.children.length){pos.set(n.id,{x:d*(W+GX),y:y});y+=H+GY;return}
-    n.children.forEach(c=>lay(c,d+1));
-    const f=pos.get(n.children[0].id),l=pos.get(n.children[n.children.length-1].id);
-    pos.set(n.id,{x:d*(W+GX),y:(f.y+l.y)/2});
-  })(state,0);
-  let maxX=0;pos.forEach(p=>maxX=Math.max(maxX,p.x));
-  let svg=`<svg width="${maxX+W+40}" height="${y+20}" style="padding:20px"><g transform="translate(20,10)">`,nodes='';
-  (function draw(n){
-    const p=pos.get(n.id);
-    n.children.forEach(c=>{const q=pos.get(c.id);
-      svg+=`<path d="M${p.x+W},${p.y+H/2} C${p.x+W+GX/2},${p.y+H/2} ${q.x-GX/2},${q.y+H/2} ${q.x},${q.y+H/2}" fill="none" stroke="${c.color}" stroke-width="2" opacity=".7"/>`;draw(c)});
-    const on=ch.includes(n);const t=(n.text||'…');
-    nodes+=`<g class="n" data-id="${n.id}"><rect x="${p.x}" y="${p.y}" width="${W}" height="${H}" rx="9" fill="${n===state?'#2b3550':'#232a39'}" stroke="${n===sel()?'#fff':n.color}" stroke-width="${n===sel()?3:on?2.5:1.5}"/><text x="${p.x+10}" y="${p.y+H/2+4}">${esc(t.length>24?t.slice(0,23)+'…':t)}</text>${n.note?`<text x="${p.x+W-20}" y="${p.y+H/2+4}">📝</text>`:''}</g>`;
-  })(state);
-  svg+=nodes+'</g></svg>';
-  const m=$('#map');m.innerHTML=svg;
-  m.querySelectorAll('g.n').forEach(g=>{
-    g.onclick=()=>{const id=g.dataset.id;path=[];if(id!==state.id){const trail=[];let cur=id;while(cur&&cur!==state.id){trail.unshift(cur);const p=findParent(cur);cur=p?p.id:null}path=trail}render()};
-    g.ondblclick=()=>{const n=sel();const t=prompt('Text:',n.text);if(t!==null){n.text=t;render()}};
-  });
+function renderSideLight(){
+  const n=sel();$('#crumb').textContent=pathNodes().map(x=>x.text||'…').join(' › ');
+  const st=$('#sTitle');if(document.activeElement!==st){st.value=n.text}growSide();
 }
-const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function growSide(){const t=$('#sTitle');t.style.height='auto';t.style.height=t.scrollHeight+'px'}
+$('#sTitle').addEventListener('input',e=>{const n=sel();n.text=e.target.value;save();growSide();
+  const el=els.get(n.id);if(el&&document.activeElement!==el.firstChild)el.firstChild.textContent=n.text;
+  if(n===state)$('#title').value=n.text;drawLinks();
+  $('#crumb').textContent=pathNodes().map(x=>x.text||'…').join(' › ');
+  const ta=document.querySelector(`textarea[data-id="${n.id}"]`);if(ta){ta.value=n.text;grow(ta)}});
+$('#sNote').addEventListener('input',e=>{const n=sel();n.note=e.target.value;save();const el=els.get(n.id);el&&el.classList.toggle('hasnote',!!n.note)});
+$('#title').addEventListener('input',e=>{state.text=e.target.value;save();const el=els.get(state.id);if(el&&document.activeElement!==el.firstChild)el.firstChild.textContent=state.text;drawLinks();if(selId===state.id&&document.activeElement!==$('#sTitle'))$('#sTitle').value=state.text});
 
-// ---------- Toolbar ----------
-function setView(v){view=v;$('#cols').style.display=v==='cols'?'flex':'none';$('#map').style.display=v==='map'?'block':'none';
-  $('#vCols').classList.toggle('on',v==='cols');$('#vMap').classList.toggle('on',v==='map');render()}
-$('#vCols').onclick=()=>setView('cols');$('#vMap').onclick=()=>setView('map');
+/* ================= Gesamt ================= */
+function render(){
+  save();$('#title').value=state.text;
+  if(mode==='canvas')renderCanvas();else renderCols();
+  renderSide();
+}
+function setMode(m){
+  mode=m;
+  $('#canvas').style.display=m==='canvas'?'block':'none';$('#cols').style.display=m==='cols'?'flex':'none';
+  $('#vCanvas').classList.toggle('on',m==='canvas');$('#vCols').classList.toggle('on',m==='cols');
+  ['bLayout','bFit','zOut','zIn'].forEach(i=>$('#'+i).style.display=m==='canvas'?'':'none');
+  render();
+  if(m==='canvas'&&!view.set)requestAnimationFrame(()=>{fitView();});
+}
+$('#vCanvas').onclick=()=>setMode('canvas');$('#vCols').onclick=()=>setMode('cols');
+$('#bLayout').onclick=()=>{autoLayout();applyPos();drawLinks();save();fitView()};
+$('#bFit').onclick=fitView;
+const cz=f=>{const r=rectOf();zoomAt(r.width/2,r.height/2,f)};
+$('#zIn').onclick=()=>cz(1.25);$('#zOut').onclick=()=>cz(.8);
+$('#bSide').onclick=()=>$('#side').classList.toggle('hide');
+if(innerWidth<=700)$('#side').classList.add('hide');
 $('#bExp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}));
   a.download=(state.text||'mindmap').replace(/[^\w\-äöüÄÖÜß ]+/g,'_')+'.json';a.click()};
 $('#bImp').onclick=()=>$('#file').click();
 $('#file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
-  r.onload=()=>{try{const d=JSON.parse(r.result);if(!d||!Array.isArray(d.children))throw 0;state=d;path=[];render()}catch(_){alert('Ungültige Mindmap-Datei')}};
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(!d||!Array.isArray(d.children))throw 0;state=d;selId=state.id;view.set=false;render();requestAnimationFrame(fitView)}catch(_){alert('Ungültige Mindmap-Datei')}};
   r.readAsText(f);e.target.value=''};
-$('#bNew').onclick=()=>{if(confirm('Neue, leere Mindmap beginnen? Die aktuelle geht verloren (vorher exportieren!).')){state=node('Neue Mindmap');path=[];render()}};
-
-setView('cols');
+$('#bNew').onclick=()=>{if(confirm('Neue, leere Mindmap beginnen? Die aktuelle geht verloren (vorher exportieren!).')){state=node('Neue Mindmap');state.x=0;state.y=0;selId=state.id;view.set=false;render();requestAnimationFrame(fitView)}};
+addEventListener('resize',()=>{if(mode==='canvas')applyView()});
+setMode('canvas');
 </script>
 </body>
 </html>
