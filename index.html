@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mindmap Creator</title>
+<style>
+:root{--bg:#12151c;--panel:#1a1f2b;--panel2:#232a39;--line:#2e3749;--text:#e8ecf4;--muted:#8d99b0;--acc:#6aa8ff}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);display:flex;flex-direction:column}
+header{display:flex;gap:8px;align-items:center;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:1rem;margin:0 8px 0 0}
+#title{background:transparent;border:1px solid transparent;color:var(--text);font-size:1rem;font-weight:700;padding:5px 8px;border-radius:6px;min-width:160px}
+#title:hover,#title:focus{border-color:var(--line);outline:none;background:var(--panel2)}
+button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;font-size:.85rem}
+button:hover{border-color:var(--acc)}
+button.on{background:var(--acc);color:#0b1220;border-color:var(--acc)}
+.sp{flex:1}
+main{flex:1;min-height:0;display:flex}
+#cols{flex:1;display:flex;overflow-x:auto;gap:10px;padding:12px;align-items:flex-start}
+.col{flex:none;width:260px;max-height:100%;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.col h2{margin:0;padding:9px 12px;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);border-bottom:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.list{overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:5px}
+.item{display:flex;align-items:center;gap:4px;background:var(--panel2);border:1px solid var(--line);border-left:5px solid var(--c,#555);border-radius:7px;padding:2px 4px}
+.item.sel{border-color:var(--acc);border-left-color:var(--c,#555);box-shadow:0 0 0 1px var(--acc)}
+.item input.t{flex:1;min-width:0;background:transparent;border:none;color:var(--text);padding:7px 4px;font-size:.92rem}
+.item input.t:focus{outline:none}
+.item .go{color:var(--muted);font-size:.75rem;padding:0 2px;cursor:pointer;user-select:none}
+.item .cnt{font-size:.7rem;color:var(--muted);background:var(--bg);border-radius:9px;padding:1px 6px}
+.item .note{font-size:.8rem;opacity:.8}
+.item .acts{display:none;gap:2px}
+.item:hover .acts,.item.sel .acts{display:flex}
+.acts button{padding:1px 5px;font-size:.75rem;border-radius:4px}
+.add{padding:6px;border-top:1px solid var(--line)}
+.add input{width:100%;background:var(--bg);border:1px dashed var(--line);border-radius:7px;color:var(--text);padding:8px;font-size:.9rem}
+.add input:focus{outline:none;border-color:var(--acc)}
+#side{width:280px;flex:none;background:var(--panel);border-left:1px solid var(--line);padding:12px;display:flex;flex-direction:column;gap:8px;overflow:auto}
+#side label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+#side textarea{flex:1;min-height:140px;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:8px;font:inherit;resize:vertical}
+#side input[type=text]{background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--text);padding:8px;font:inherit}
+.sw{display:flex;gap:6px;flex-wrap:wrap}
+.sw span{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+.sw span.on{border-color:#fff}
+#crumb{font-size:.8rem;color:var(--muted)}
+#map{flex:1;overflow:auto;display:none;background:var(--bg)}
+#map svg{display:block}
+#map g.n{cursor:pointer}
+#map text{fill:var(--text);font-size:13px;pointer-events:none}
+@media(max-width:700px){#side{display:none}.col{width:78vw}}
+</style>
+</head>
+<body>
+<header>
+  <h1>🧠 Mindmap</h1>
+  <input id="title" title="Titel der Mindmap" value="Meine Mindmap">
+  <button id="vCols" class="on">☰ Spalten</button>
+  <button id="vMap">🕸 Karte</button>
+  <span class="sp"></span>
+  <button id="bExp">⬇ Export</button>
+  <button id="bImp">⬆ Import</button>
+  <button id="bNew">Neu</button>
+  <input type="file" id="file" accept=".json,application/json" hidden>
+</header>
+<main>
+  <div id="cols"></div>
+  <div id="map"></div>
+  <aside id="side">
+    <div id="crumb">Nichts ausgewählt</div>
+    <label>Titel</label><input type="text" id="sTitle">
+    <label>Farbe</label><div class="sw" id="sw"></div>
+    <label>Notizen / Inhalt</label><textarea id="sNote" placeholder="Hier den Map-Point ausfüllen …"></textarea>
+  </aside>
+</main>
+<script>
+const COLORS=['#6aa8ff','#4cc38a','#f2c14e','#ef7b7b','#b08cf0','#4fd1d9','#f29e5c','#8d99b0'];
+const KEY='mindmap-v1';
+let uid=()=>Math.random().toString(36).slice(2,9);
+let node=(text,color)=>({id:uid(),text,note:'',color:color||COLORS[0],children:[]});
+let state=load()||fresh();
+let path=[];        // ausgewählte IDs ab Wurzel (ohne Wurzel)
+let view='cols';
+
+function fresh(){
+  const r=node('Meine Mindmap');
+  ['Idee A','Idee B','Idee C'].forEach((t,i)=>{const c=node(t,COLORS[i]);r.children.push(c)});
+  r.children[0].children.push(node('Unterpunkt 1',COLORS[0]),node('Unterpunkt 2',COLORS[0]));
+  return r;
+}
+function load(){try{return JSON.parse(localStorage.getItem(KEY))}catch(e){return null}}
+function save(){localStorage.setItem(KEY,JSON.stringify(state))}
+const $=s=>document.querySelector(s);
+
+// Pfad -> Knotenliste (Wurzel + Auswahl), ungültige IDs abschneiden
+function chain(){
+  const out=[state];
+  for(const id of path){const n=out[out.length-1].children.find(c=>c.id===id);if(!n)break;out.push(n)}
+  path=out.slice(1).map(n=>n.id);return out;
+}
+function findParent(id,n=state){
+  for(const c of n.children){if(c.id===id)return n;const p=findParent(id,c);if(p)return p}
+  return null;
+}
+function sel(){const c=chain();return c[c.length-1]}
+
+function render(){
+  save();
+  const ch=chain();
+  $('#title').value=state.text;
+  if(view==='cols')renderCols(ch);else renderMap(ch);
+  renderSide(ch);
+}
+
+function renderCols(ch){
+  const box=$('#cols');const scroll=box.scrollLeft;box.innerHTML='';
+  // pro Ebene eine Spalte: Kinder von ch[i]; zusätzlich eine Spalte für die Kinder des letzten Knotens
+  for(let i=0;i<ch.length;i++){
+    const parent=ch[i],selId=path[i];
+    const col=document.createElement('div');col.className='col';
+    col.innerHTML=`<h2></h2><div class="list"></div><div class="add"><input placeholder="+ Neuer Punkt (Enter)"></div>`;
+    col.querySelector('h2').textContent=i===0?'Hauptpunkte':parent.text||'(leer)';
+    const list=col.querySelector('.list');
+    parent.children.forEach((c,idx)=>{
+      const el=document.createElement('div');el.className='item'+(c.id===selId?' sel':'');
+      el.style.setProperty('--c',c.color);
+      el.innerHTML=`<input class="t"><span class="note" title="Hat Notiz">${c.note?'📝':''}</span>${c.children.length?`<span class="cnt">${c.children.length}</span>`:''}<span class="acts"><button data-a="up" title="Hoch">↑</button><button data-a="dn" title="Runter">↓</button><button data-a="del" title="Löschen">✕</button></span><span class="go">▸</span>`;
+      const inp=el.querySelector('input');inp.value=c.text;
+      inp.addEventListener('input',()=>{c.text=inp.value;save();if(c.id===path[i]){renderSideOnly();}});
+      inp.addEventListener('focus',()=>{if(path[i]!==c.id){path=path.slice(0,i);path.push(c.id);render();
+        const again=document.querySelectorAll('.col')[i]?.querySelectorAll('.item input.t')[idx];again&&again.focus()}});
+      inp.addEventListener('keydown',e=>{if(e.key==='Enter'){inp.blur();focusAdd(i+1)}});
+      el.addEventListener('click',e=>{if(e.target.dataset.a)return;path=path.slice(0,i);path.push(c.id);render()});
+      el.querySelectorAll('[data-a]').forEach(b=>b.onclick=e=>{
+        e.stopPropagation();const a=b.dataset.a;
+        if(a==='del'){if(c.children.length&&!confirm(`"${c.text}" samt ${c.children.length} Unterpunkten löschen?`))return;parent.children.splice(idx,1);path=path.slice(0,i)}
+        else{const j=a==='up'?idx-1:idx+1;if(j<0||j>=parent.children.length)return;[parent.children[idx],parent.children[j]]=[parent.children[j],parent.children[idx]]}
+        render();
+      });
+      list.appendChild(el);
+    });
+    const add=col.querySelector('.add input');
+    add.dataset.lvl=i;
+    add.addEventListener('keydown',e=>{
+      if(e.key!=='Enter'||!add.value.trim())return;
+      const col0=parent.children.length?parent.children[parent.children.length-1].color:null;
+      const n=node(add.value.trim(),i===0?COLORS[parent.children.length%COLORS.length]:parent.color);
+      parent.children.push(n);path=path.slice(0,i);path.push(n.id);render();focusAdd(i);
+    });
+    box.appendChild(col);
+  }
+  box.scrollLeft=scroll;
+  const last=box.lastElementChild;if(last)last.scrollIntoView({inline:'nearest',block:'nearest'});
+}
+function focusAdd(i){const a=document.querySelector(`.add input[data-lvl="${i}"]`);a&&a.focus()}
+
+function renderSide(ch){
+  const n=ch[ch.length-1];
+  $('#crumb').textContent=ch.map(x=>x.text||'…').join(' › ');
+  const sw=$('#sw');sw.innerHTML='';
+  COLORS.forEach(c=>{const s=document.createElement('span');s.style.background=c;if(c===n.color)s.className='on';
+    s.onclick=()=>{n.color=c;(function paint(x){x.color=c;x.children.forEach(paint)})(n);render()};sw.appendChild(s)});
+  $('#sTitle').value=n.text;$('#sNote').value=n.note;
+}
+function renderSideOnly(){const n=sel();$('#sTitle').value=n.text;$('#crumb').textContent=chain().map(x=>x.text||'…').join(' › ')}
+$('#sTitle').addEventListener('input',e=>{const n=sel();n.text=e.target.value;save();if(n===state)$('#title').value=n.text;
+  document.querySelectorAll('.col').forEach(()=>{});
+});
+$('#sTitle').addEventListener('change',render);
+$('#sNote').addEventListener('input',e=>{sel().note=e.target.value;save()});
+$('#sNote').addEventListener('change',render);
+$('#title').addEventListener('input',e=>{state.text=e.target.value;save()});
+
+// ---------- Kartenansicht ----------
+function renderMap(ch){
+  const W=190,H=34,GX=60,GY=12;let y=0;
+  const pos=new Map();
+  (function lay(n,d){
+    if(!n.children.length){pos.set(n.id,{x:d*(W+GX),y:y});y+=H+GY;return}
+    n.children.forEach(c=>lay(c,d+1));
+    const f=pos.get(n.children[0].id),l=pos.get(n.children[n.children.length-1].id);
+    pos.set(n.id,{x:d*(W+GX),y:(f.y+l.y)/2});
+  })(state,0);
+  let maxX=0;pos.forEach(p=>maxX=Math.max(maxX,p.x));
+  let svg=`<svg width="${maxX+W+40}" height="${y+20}" style="padding:20px"><g transform="translate(20,10)">`,nodes='';
+  (function draw(n){
+    const p=pos.get(n.id);
+    n.children.forEach(c=>{const q=pos.get(c.id);
+      svg+=`<path d="M${p.x+W},${p.y+H/2} C${p.x+W+GX/2},${p.y+H/2} ${q.x-GX/2},${q.y+H/2} ${q.x},${q.y+H/2}" fill="none" stroke="${c.color}" stroke-width="2" opacity=".7"/>`;draw(c)});
+    const on=ch.includes(n);const t=(n.text||'…');
+    nodes+=`<g class="n" data-id="${n.id}"><rect x="${p.x}" y="${p.y}" width="${W}" height="${H}" rx="9" fill="${n===state?'#2b3550':'#232a39'}" stroke="${n===sel()?'#fff':n.color}" stroke-width="${n===sel()?3:on?2.5:1.5}"/><text x="${p.x+10}" y="${p.y+H/2+4}">${esc(t.length>24?t.slice(0,23)+'…':t)}</text>${n.note?`<text x="${p.x+W-20}" y="${p.y+H/2+4}">📝</text>`:''}</g>`;
+  })(state);
+  svg+=nodes+'</g></svg>';
+  const m=$('#map');m.innerHTML=svg;
+  m.querySelectorAll('g.n').forEach(g=>{
+    g.onclick=()=>{const id=g.dataset.id;path=[];if(id!==state.id){const trail=[];let cur=id;while(cur&&cur!==state.id){trail.unshift(cur);const p=findParent(cur);cur=p?p.id:null}path=trail}render()};
+    g.ondblclick=()=>{const n=sel();const t=prompt('Text:',n.text);if(t!==null){n.text=t;render()}};
+  });
+}
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---------- Toolbar ----------
+function setView(v){view=v;$('#cols').style.display=v==='cols'?'flex':'none';$('#map').style.display=v==='map'?'block':'none';
+  $('#vCols').classList.toggle('on',v==='cols');$('#vMap').classList.toggle('on',v==='map');render()}
+$('#vCols').onclick=()=>setView('cols');$('#vMap').onclick=()=>setView('map');
+$('#bExp').onclick=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(state,null,2)],{type:'application/json'}));
+  a.download=(state.text||'mindmap').replace(/[^\w\-äöüÄÖÜß ]+/g,'_')+'.json';a.click()};
+$('#bImp').onclick=()=>$('#file').click();
+$('#file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(!d||!Array.isArray(d.children))throw 0;state=d;path=[];render()}catch(_){alert('Ungültige Mindmap-Datei')}};
+  r.readAsText(f);e.target.value=''};
+$('#bNew').onclick=()=>{if(confirm('Neue, leere Mindmap beginnen? Die aktuelle geht verloren (vorher exportieren!).')){state=node('Neue Mindmap');path=[];render()}};
+
+setView('cols');
+</script>
+</body>
+</html>
